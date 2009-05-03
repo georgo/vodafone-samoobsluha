@@ -24,6 +24,8 @@ class Samoobsluha:
 		self.token = None # Token
 		self.price = None
 		self.traffic = None
+		self.credit = None
+		self.bill = None
 
 	def login(self):
 		pole = {
@@ -42,7 +44,7 @@ class Samoobsluha:
 		except:
 			raise
 
-	def check(self):
+	def checkData(self):
 		try:
 			socket.setdefaulttimeout(10)
 			request = urllib.urlopen("https://samoobsluha.vodafone.cz/data_tariff.php?OSKWSCID=%s" %(self.token))
@@ -55,10 +57,32 @@ class Samoobsluha:
 		except:
 			raise
 
+	def checkBill(self):
+		try:
+			socket.setdefaulttimeout(10)
+			request = urllib.urlopen("https://samoobsluha.vodafone.cz/account_status.php?OSKWSCID=%s" %(self.token))
+			data = request.read()
+			bill = re.findall(u'<td><strong>Celkem:</strong></td><td class="right">([0-9]+)', data.decode('utf-8'))[0]
+			self.bill = bill
+			return True
+		except:
+			raise
+
+	def checkCredit(self):
+		try:
+			socket.setdefaulttimeout(10)
+			request = urllib.urlopen("https://samoobsluha.vodafone.cz/accbal.php?mode=1&show=2&OSKWSCID=%s" %(self.token))
+			data = request.read()
+			credit = re.findall(u'<strong>Zbývá vyčerpat</strong></td><td class="right">([0-9]+),([0-9]{2})', data.decode('utf-8'))[0]
+			self.credit = "%s.%s" %(credit[0], credit[1])
+			return True
+		except:
+			raise
+
 	def send(self):
 		try:
 			server = smtplib.SMTP("localhost")
-			msg = "From: %s\r\nSubject:Prenesena data\r\n\r\n%s MB - %s Kc" %(self.kernel.sendfrom, self.traffic, self.price)
+			msg = "From: %s\r\nSubject:Vodafone\r\n\r\nUcet: %s Kc, Kredit: %s Kc, Data: %s MB - %s Kc" %(self.kernel.sendfrom, self.bill, self.credit, self.traffic, self.price)
 			server.sendmail(self.kernel.sendfrom, self.kernel.sendto, msg)
 			server.quit()
 		except:
@@ -67,9 +91,14 @@ class Samoobsluha:
 
 vodafone = Samoobsluha()
 if vodafone.login():
-	if vodafone.check():
-		vodafone.send()
-		None
+	if vodafone.checkBill():
+		if vodafone.checkCredit():
+			if vodafone.checkData():
+				vodafone.send();
+			else:
+				sys.exit(4)
+		else:
+			sys.exit(3)
 	else:
 		sys.exit(2)
 else:
