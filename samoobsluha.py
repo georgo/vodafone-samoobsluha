@@ -62,7 +62,7 @@ class Samoobsluha:
 			socket.setdefaulttimeout(10)
 			request = urllib.urlopen("https://samoobsluha.vodafone.cz/account_status.php?OSKWSCID=%s" %(self.token))
 			data = request.read()
-			bill = re.findall(u'<td><strong>Celkem:</strong></td><td class="right">([0-9]+)', data.decode('utf-8'))[0]
+			bill = re.findall(u'Celkem</th><td class="total second-col">([0-9]+)', data.decode('utf-8'))[0]
 			self.bill = bill
 			return True
 		except:
