@@ -1,5 +1,15 @@
 #!/usr/bin/python2
 # -*- coding: utf-8 -*-
+#
+# Base Vodafone librabry
+# @author Tomas K. <iam@tomask.info>
+#
+# Usage:
+# from VodafoneBase import *
+# v = VodafoneBase("608123456", "MTIzNA==")
+# if v.login():
+#     data = v.getDataUsage()
+#     print "Used data: %.2f MB , remaining %.2f MB" % (data['used'], data['remain'])
 
 import os, re, urllib, urllib2, json, socket, base64, Cookie;
 
@@ -13,16 +23,17 @@ class MyHTTPRedirectHandler(urllib2.HTTPRedirectHandler):
 """ Base Vodafone object """
 
 class VodafoneBase:
-	""" UR Constants """
-	_originUrl = "https://muj.vodafone.cz"
-	_loginUrl = "https://muj.vodafone.cz/prihlaseni"
+	""" URL Constants """
+	_lang = "en"
+	_originUrl = "https://muj.vodafone.cz/en"
+	_loginUrl = "https://muj.vodafone.cz/en/login"
 	_loginPostUrl = "https://muj.vodafone.cz/login-check"
 
-	_usageUrl = "https://muj.vodafone.cz/utrata-a-vyuctovani/utrata-a-cerpani"
-	_dataUsageUrl = "https://muj.vodafone.cz/spending-and-billing/smart-overview/usage"
+	_usageUrl = "https://muj.vodafone.cz/en/spending-and-billing/smart-overview"
+	_dataUsageUrl = "https://muj.vodafone.cz/en/spending-and-billing/smart-overview/usage"
 
 	""" User credentials"""
-	_user = "608123456"
+	_user = "608xxxxxx"
 	_password = ""
 	_session = ""
 	_persistent = ""
@@ -32,23 +43,20 @@ class VodafoneBase:
 		self._user = user
 		self._password = base64.decodestring(password)
 
-		""" Proxy configuration, disallow redirects """
+		""" Disallow redirects """
 		opener = urllib2.build_opener(MyHTTPRedirectHandler)
 		urllib2.install_opener(opener)
 	
 	def _getSession(self, headers):
-		print "*************"
 		for (header, cont) in headers.items():
 				if header == "set-cookie":
 					cookies = Cookie.SimpleCookie(cont)
 					if "WSCSID" in cookies:
 						self._session = cookies["WSCSID"].value
-						print "Changed session id: %s" % (self._session)
-					print cookies.keys()
+						#print "Changed session id: %s" % (self._session)
 					if "persistent" in cookies:
 						self._persistent = cookies["persistent"].value
-						print "Changed persistent id: %s" % (self._persistent)
-		print "*************"
+						#print "Changed persistent id: %s" % (self._persistent)
 		return True
 
 	def _getLoginPageToken(self):
@@ -80,7 +88,7 @@ class VodafoneBase:
 		loginPageReq.add_header("Content-Length", len(loginData))
 		loginPageReq.add_header("Origin", self._originUrl)
 		loginPageReq.add_header("Referer", self._loginUrl)
-		loginPageReq.add_header("Cookie", "hl=cs; persistent=%s; WSCSID=%s" % (self._persistent, self._session))
+		loginPageReq.add_header("Cookie", "hl=%s; persistent=%s; WSCSID=%s" % (self._lang, self._persistent, self._session))
 		loginPageReq.add_header("Upgrade-Insecure-Requests", "1")
 		loginPageReq.add_header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/48.0.2564.109 Safari/537.36")
 		loginPage = urllib2.urlopen(loginPageReq, loginData)
@@ -92,7 +100,7 @@ class VodafoneBase:
 			loginPageReq = urllib2.Request(self._originUrl)
 			loginPageReq.add_header("Origin", self._originUrl)
 			loginPageReq.add_header("Referer", self._loginUrl)
-			loginPageReq.add_header("Cookie", "hl=cs; persistent=%s; WSCSID=%s" % (self._persistent, self._session))
+			loginPageReq.add_header("Cookie", "hl=%s; persistent=%s; WSCSID=%s" % (self._lang, self._persistent, self._session))
 			loginPageReq.add_header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/48.0.2564.109 Safari/537.36")
 			loginPage = urllib2.urlopen(loginPageReq)
 			return True
@@ -103,7 +111,7 @@ class VodafoneBase:
 		usagePageReq = urllib2.Request(self._usageUrl)
 		usagePageReq.add_header("Origin", self._originUrl)
 		usagePageReq.add_header("Referer", self._originUrl)
-		usagePageReq.add_header("Cookie", "hl=cs; persistent=%s; WSCSID=%s" % (self._persistent, self._session))
+		usagePageReq.add_header("Cookie", "hl=%s; persistent=%s; WSCSID=%s" % (self._lang, self._persistent, self._session))
 		usagePageReq.add_header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/48.0.2564.109 Safari/537.36")
 		usagePage = urllib2.urlopen(usagePageReq)
 		usagePage.read()
@@ -121,14 +129,22 @@ class VodafoneBase:
 		dataUsageReq.add_header("X-Requested-With", "XMLHttpRequest")
 		dataUsageReq.add_header("Accept", "*/*")
 		dataUsageReq.add_header("Origin", self._originUrl)
-		dataUsageReq.add_header("Cookie", "hl=cs; persistent=%s; WSCSID=%s" % (self._persistent, self._session))
+		dataUsageReq.add_header("Cookie", "hl=%s; persistent=%s; WSCSID=%s" % (self._lang, self._persistent, self._session))
 		dataUsageReq.add_header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/48.0.2564.109 Safari/537.36")
 		usageDataPage = urllib2.urlopen(dataUsageReq, dataUsageData)
 		self._getSession(usageDataPage.info())
 		usageDataPageData = usageDataPage.read()
 
+		# Used: <strong>5 818,71&nbsp;MB</strong>
+		usedDataRe = re.findall(u'Used: <strong>([0-9 ,]*)&nbsp;MB<\/strong>', usageDataPageData.decode('utf-8'))
+		usedData = float(usedDataRe[0].replace(" ", "").replace(",", "."))
+
+		# Remains in CZ <strong class="nowrap">97 605,29&nbsp;MB</strong>
+		remainsDataRe = re.findall(u'Remains in CZ <strong class="nowrap">([0-9 ,]*)&nbsp;MB</strong>', usageDataPageData.decode('utf-8'))
+		remainsData = float(remainsDataRe[0].replace(" ", "").replace(",", "."))
+
 		""" Parse data usage page """
-		return {'used': 0, 'remain': 0}
+		return {'used': usedData, 'remain': remainsData}
 
 	def login(self):
 		token = self._getLoginPageToken()
