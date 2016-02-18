@@ -47,7 +47,8 @@ class VodafoneBase:
 		""" Disallow redirects """
 		opener = urllib2.build_opener(MyHTTPRedirectHandler)
 		urllib2.install_opener(opener)
-	
+
+	""" Parse session (WSCSID) and persistent cookie from response headers """
 	def _getSession(self, headers):
 		for (header, cont) in headers.items():
 				if header == "set-cookie":
@@ -60,6 +61,7 @@ class VodafoneBase:
 						#print "Changed persistent id: %s" % (self._persistent)
 		return True
 
+	""" Get CSRF token from login page """
 	def _getLoginPageToken(self):
 		try:
 			socket.setdefaulttimeout(10)
@@ -67,16 +69,17 @@ class VodafoneBase:
 			loginPageReq = urllib2.Request(self._loginUrl)
 			loginPage = urllib2.urlopen(loginPageReq)
 			self._getSession(loginPage.info())
-			
+
 			loginPageData = loginPage.read()
 			token = re.findall(u'_csrf_token" value="([a-zA-Z0-9\-_]+)"', loginPageData.decode('utf-8'))
 			if len(token) < 1:
 				print loginPageData
-				raise ValueError('Token was not found on login page.')	
+				raise ValueError('Token was not found on login page.')
 			return token[0]
 		except:
 			raise
 
+	""" Perform login on page (requires csrf token) """
 	def _postLoginCredentials(self, token):
 		loginData = urllib.urlencode({
 			'_username': self._user,
@@ -108,6 +111,7 @@ class VodafoneBase:
 
 		return False
 
+	""" Get spending in current month """
 	def _getCurrentSpending(self):
 		usagePageReq = urllib2.Request(self._usageUrl)
 		usagePageReq.add_header("Origin", self._originUrl)
@@ -123,7 +127,7 @@ class VodafoneBase:
 
 		return currentSpending
 
-
+	""" Get usage of data and remaining on data tariff """
 	def _getDataUsage(self):
 		usagePageReq = urllib2.Request(self._usageUrl)
 		usagePageReq.add_header("Origin", self._originUrl)
@@ -163,13 +167,15 @@ class VodafoneBase:
 		""" Parse data usage page """
 		return {'used': usedData, 'remain': remainsData}
 
+	""" Login to Vodafone.cz """
 	def login(self):
 		token = self._getLoginPageToken()
 		return self._postLoginCredentials(token)
 
+	""" Get current spending """
 	def getCurrentSpending(self):
 		return self._getCurrentSpending()
 
+	""" Get data usage """
 	def getDataUsage(self):
 		return self._getDataUsage()
-	
