@@ -8,6 +8,7 @@
 # from VodafoneBase import *
 # v = VodafoneBase("608123456", "MTIzNA==")
 # if v.login():
+#     print "Current bill: %.2f CZK" % (v.getCurrentSpending())
 #     data = v.getDataUsage()
 #     print "Used data: %.2f MB , remaining %.2f MB" % (data['used'], data['remain'])
 
@@ -107,6 +108,22 @@ class VodafoneBase:
 
 		return False
 
+	def _getCurrentSpending(self):
+		usagePageReq = urllib2.Request(self._usageUrl)
+		usagePageReq.add_header("Origin", self._originUrl)
+		usagePageReq.add_header("Referer", self._originUrl)
+		usagePageReq.add_header("Cookie", "hl=%s; persistent=%s; WSCSID=%s" % (self._lang, self._persistent, self._session))
+		usagePageReq.add_header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/48.0.2564.109 Safari/537.36")
+		usagePage = urllib2.urlopen(usagePageReq)
+		usagePageData = usagePage.read()
+
+		# <strong class="blue big vodafoneRgBd">1 096,10 CZK</strong>
+		currentSpendingRe = re.findall(u'<strong class="blue big vodafoneRgBd">([0-9 ,]+) CZK<\/strong>', usagePageData.decode('utf-8'))
+		currentSpending = float(currentSpendingRe[0].replace(" ", "").replace(",", "."))
+
+		return currentSpending
+
+
 	def _getDataUsage(self):
 		usagePageReq = urllib2.Request(self._usageUrl)
 		usagePageReq.add_header("Origin", self._originUrl)
@@ -150,6 +167,9 @@ class VodafoneBase:
 		token = self._getLoginPageToken()
 		return self._postLoginCredentials(token)
 
+	def getCurrentSpending(self):
+		return self._getCurrentSpending()
+
 	def getDataUsage(self):
-		return self._getDataUsage();
+		return self._getDataUsage()
 	
