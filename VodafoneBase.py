@@ -142,11 +142,15 @@ class VodafoneBase:
 		currentSpendingRe = re.findall(u'<strong class="blue big vodafoneRgBd">([0-9 ,]+) CZK<\/strong>', usagePageData.decode('utf-8'))
 		currentSpending = float(currentSpendingRe[0].replace(" ", "").replace(",", "."))
 
+		""" Cache current spending """
+		self._currentSpending = currentSpending
+
 		# <div id="data_usage" class="boxWrapper withIcon soWrapper js-usage-placeholder js-data-usage-wrapper" data-msisdn="420608123456" data-codename="pc_basic"
 		dataTariffRe = re.findall(u'id="data_usage".*data-codename="([a-zA-z_]+)">', usagePageData.decode('utf-8'))
+		""" Cache data tariff """
 		self._dataTariff = dataTariffRe[0]
 
-		return currentSpending
+		return self._currentSpending
 
 	""" Get usage of data and remaining on data tariff """
 	def _getDataUsage(self):
@@ -184,8 +188,9 @@ class VodafoneBase:
 		remainsDataRe = re.findall(u'Remains in CZ <strong class="nowrap">([0-9 ,]*)&nbsp;MB</strong>', usageDataPageData.decode('utf-8'))
 		remainsData = float(remainsDataRe[0].replace(" ", "").replace(",", "."))
 
-		""" Parse data usage page """
-		return {'used': usedData, 'remain': remainsData}
+		""" Cache data usage """
+		self._dataUsage = {'used': usedData, 'remain': remainsData}
+		return self._dataUsage
 
 	""" Login to Vodafone.cz """
 	def login(self):
@@ -195,11 +200,11 @@ class VodafoneBase:
 	""" Get current spending """
 	def getCurrentSpending(self):
 		if self._currentSpending is None:
-			self._currentSpending = self._getCurrentSpending()
+			self._getCurrentSpending()
 		return self._currentSpending
 
 	""" Get data usage """
 	def getDataUsage(self):
 		if self._dataUsage is None:
-			self._dataUsage = self._getDataUsage()
+			self._getDataUsage()
 		return self._dataUsage
