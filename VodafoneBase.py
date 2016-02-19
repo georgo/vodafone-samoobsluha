@@ -27,14 +27,24 @@ class VodafoneBase:
 	""" URL Constants """
 	_lang = "en"
 	_originUrl = "https://muj.vodafone.cz/en"
+
 	_loginUrl = "https://muj.vodafone.cz/en/login"
+	_loginSuccess = "https://muj.vodafone.cz/"
 	_loginPostUrl = "https://muj.vodafone.cz/login-check"
 
 	_usageUrl = "https://muj.vodafone.cz/en/spending-and-billing/smart-overview"
 	_dataUsageUrl = "https://muj.vodafone.cz/en/spending-and-billing/smart-overview/usage"
 
-	""" User credentials"""
-	_user = "608xxxxxx"
+	""" Common headers """
+	_headerUA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/48.0.2564.109 Safari/537.36"
+
+	""" User tariff information and cache """
+	_currentSpending = None
+	_dataUsage = None
+	_dataTariff = ""
+
+	""" User credentials a session tokens """
+	_user = "608123456"
 	_password = ""
 	_session = ""
 	_persistent = ""
@@ -44,8 +54,10 @@ class VodafoneBase:
 		self._user = user
 		self._password = base64.decodestring(password)
 
-		""" Disallow redirects """
-		opener = urllib2.build_opener(MyHTTPRedirectHandler)
+		""" Disallow redirects, proxy settings """
+		# proxy = urllib2.ProxyHandler({'https': 'your-favourite-proxy:3128'})
+		proxy = urllib2.ProxyHandler({})
+		opener = urllib2.build_opener(proxy, MyHTTPRedirectHandler)
 		urllib2.install_opener(opener)
 
 	""" Parse session (WSCSID) and persistent cookie from response headers """
@@ -73,7 +85,6 @@ class VodafoneBase:
 			loginPageData = loginPage.read()
 			token = re.findall(u'_csrf_token" value="([a-zA-Z0-9\-_]+)"', loginPageData.decode('utf-8'))
 			if len(token) < 1:
-				print loginPageData
 				raise ValueError('Token was not found on login page.')
 			return token[0]
 		except:
@@ -94,10 +105,16 @@ class VodafoneBase:
 		loginPageReq.add_header("Referer", self._loginUrl)
 		loginPageReq.add_header("Cookie", "hl=%s; persistent=%s; WSCSID=%s" % (self._lang, self._persistent, self._session))
 		loginPageReq.add_header("Upgrade-Insecure-Requests", "1")
-		loginPageReq.add_header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/48.0.2564.109 Safari/537.36")
+		loginPageReq.add_header("User-Agent", self._headerUA)
 		loginPage = urllib2.urlopen(loginPageReq, loginData)
 		loginPage.read()
-		success =  self._getSession(loginPage.info())
+		headers = loginPage.info()
+
+		""" Verify redirect after login request """
+		if headers["location"] != self._loginSuccess:
+			return False;
+
+		success = self._getSession(headers)
 
 		if success:
 			""" Verify homepage """
@@ -105,7 +122,7 @@ class VodafoneBase:
 			loginPageReq.add_header("Origin", self._originUrl)
 			loginPageReq.add_header("Referer", self._loginUrl)
 			loginPageReq.add_header("Cookie", "hl=%s; persistent=%s; WSCSID=%s" % (self._lang, self._persistent, self._session))
-			loginPageReq.add_header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/48.0.2564.109 Safari/537.36")
+			loginPageReq.add_header("User-Agent", self._headerUA)
 			loginPage = urllib2.urlopen(loginPageReq)
 			return True
 
@@ -117,7 +134,7 @@ class VodafoneBase:
 		usagePageReq.add_header("Origin", self._originUrl)
 		usagePageReq.add_header("Referer", self._originUrl)
 		usagePageReq.add_header("Cookie", "hl=%s; persistent=%s; WSCSID=%s" % (self._lang, self._persistent, self._session))
-		usagePageReq.add_header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/48.0.2564.109 Safari/537.36")
+		usagePageReq.add_header("User-Agent", self._headerUA)
 		usagePage = urllib2.urlopen(usagePageReq)
 		usagePageData = usagePage.read()
 
@@ -125,21 +142,24 @@ class VodafoneBase:
 		currentSpendingRe = re.findall(u'<strong class="blue big vodafoneRgBd">([0-9 ,]+) CZK<\/strong>', usagePageData.decode('utf-8'))
 		currentSpending = float(currentSpendingRe[0].replace(" ", "").replace(",", "."))
 
+		# <div id="data_usage" class="boxWrapper withIcon soWrapper js-usage-placeholder js-data-usage-wrapper" data-msisdn="420608123456" data-codename="pc_basic"
+		dataTariffRe = re.findall(u'id="data_usage".*data-codename="([a-zA-z_]+)">', usagePageData.decode('utf-8'))
+		self._dataTariff = dataTariffRe[0]
+
 		return currentSpending
 
 	""" Get usage of data and remaining on data tariff """
 	def _getDataUsage(self):
-		usagePageReq = urllib2.Request(self._usageUrl)
-		usagePageReq.add_header("Origin", self._originUrl)
-		usagePageReq.add_header("Referer", self._originUrl)
-		usagePageReq.add_header("Cookie", "hl=%s; persistent=%s; WSCSID=%s" % (self._lang, self._persistent, self._session))
-		usagePageReq.add_header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/48.0.2564.109 Safari/537.36")
-		usagePage = urllib2.urlopen(usagePageReq)
-		usagePage.read()
+		""" Load current spending page first to allow consistency in navigation """
+		self._getCurrentSpending();
+
+		""" Check if data tariff was found """
+		if not self._dataTariff:
+			raise ValueError('No data tariff found.')
 
 		""" Read data usage for main number """
 		dataUsageData = urllib.urlencode({
-			'codename': 'pc_basic',
+			'codename': self._dataTariff,
 			'detail': 1,
 			'msisdn': "420%s" % (self._user)
 		})
@@ -151,7 +171,7 @@ class VodafoneBase:
 		dataUsageReq.add_header("Accept", "*/*")
 		dataUsageReq.add_header("Origin", self._originUrl)
 		dataUsageReq.add_header("Cookie", "hl=%s; persistent=%s; WSCSID=%s" % (self._lang, self._persistent, self._session))
-		dataUsageReq.add_header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/48.0.2564.109 Safari/537.36")
+		dataUsageReq.add_header("User-Agent", self._headerUA)
 		usageDataPage = urllib2.urlopen(dataUsageReq, dataUsageData)
 		self._getSession(usageDataPage.info())
 		usageDataPageData = usageDataPage.read()
@@ -174,8 +194,12 @@ class VodafoneBase:
 
 	""" Get current spending """
 	def getCurrentSpending(self):
-		return self._getCurrentSpending()
+		if self._currentSpending is None:
+			self._currentSpending = self._getCurrentSpending()
+		return self._currentSpending
 
 	""" Get data usage """
 	def getDataUsage(self):
-		return self._getDataUsage()
+		if self._dataUsage is None:
+			self._dataUsage = self._getDataUsage()
+		return self._dataUsage
