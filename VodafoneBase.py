@@ -12,7 +12,7 @@
 #     data = v.getDataUsage()
 #     print "Used data: %.2f MB , remaining %.2f MB" % (data['used'], data['remain'])
 
-import os, re, urllib, urllib2, json, socket, base64, Cookie;
+import os, re, urllib, urllib2, json, socket, base64, Cookie
 
 """ urllib configuration """
 class MyHTTPRedirectHandler(urllib2.HTTPRedirectHandler):
@@ -33,7 +33,7 @@ class VodafoneBase:
 	_loginPostUrl = "https://muj.vodafone.cz/login-check"
 
 	_usageUrl = "https://muj.vodafone.cz/en/spending-and-billing/smart-overview"
-	_dataUsageUrl = "https://muj.vodafone.cz/en/spending-and-billing/smart-overview/usage"
+	_ajaxUsageUrl = "https://muj.vodafone.cz/en/spending-and-billing/smart-overview/ajax-usages"
 
 	""" Common headers """
 	_headerUA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/48.0.2564.109 Safari/537.36"
@@ -41,7 +41,6 @@ class VodafoneBase:
 	""" User tariff information and cache """
 	_currentSpending = None
 	_dataUsage = None
-	_dataTariff = ""
 
 	""" User credentials a session tokens """
 	_user = "608123456"
@@ -112,7 +111,7 @@ class VodafoneBase:
 
 		""" Verify redirect after login request """
 		if headers["location"] != self._loginSuccess:
-			return False;
+			return False
 
 		success = self._getSession(headers)
 
@@ -145,52 +144,42 @@ class VodafoneBase:
 		""" Cache current spending """
 		self._currentSpending = currentSpending
 
-		# <div id="data_usage" class="boxWrapper withIcon soWrapper js-usage-placeholder js-data-usage-wrapper" data-msisdn="420608123456" data-codename="pc_basic"
-		dataTariffRe = re.findall(u'id="data_usage".*data-codename="([a-zA-z_]+)">', usagePageData.decode('utf-8'))
-		""" Cache data tariff """
-		self._dataTariff = dataTariffRe[0]
+		return True
 
-		return self._currentSpending
-
-	""" Get usage of data and remaining on data tariff """
-	def _getDataUsage(self):
+	""" Get ajax usage of current tariff """
+	def _getAjaxUsage(self):
 		""" Load current spending page first to allow consistency in navigation """
-		self._getCurrentSpending();
+		if not self._getCurrentSpending():
+			return False
 
-		""" Check if data tariff was found """
-		if not self._dataTariff:
-			raise ValueError('No data tariff found.')
-
-		""" Read data usage for main number """
-		dataUsageData = urllib.urlencode({
-			'codename': self._dataTariff,
-			'detail': 1,
+		""" Read ajax usage for main number """
+		ajaxUsageData = urllib.urlencode({
 			'msisdn': "420%s" % (self._user)
 		})
-		dataUsageReq = urllib2.Request(self._dataUsageUrl)
-		dataUsageReq.add_header("Content-Type", "application/x-www-form-urlencoded; charset=UTF-8")
-		dataUsageReq.add_header("Content-Length", len(dataUsageData))
-		dataUsageReq.add_header("Referer", self._usageUrl)
-		dataUsageReq.add_header("X-Requested-With", "XMLHttpRequest")
-		dataUsageReq.add_header("Accept", "*/*")
-		dataUsageReq.add_header("Origin", self._originUrl)
-		dataUsageReq.add_header("Cookie", "hl=%s; persistent=%s; WSCSID=%s" % (self._lang, self._persistent, self._session))
-		dataUsageReq.add_header("User-Agent", self._headerUA)
-		usageDataPage = urllib2.urlopen(dataUsageReq, dataUsageData)
-		self._getSession(usageDataPage.info())
-		usageDataPageData = usageDataPage.read()
+		ajaxUsageReq = urllib2.Request(self._ajaxUsageUrl)
+		ajaxUsageReq.add_header("Content-Type", "application/x-www-form-urlencoded; charset=UTF-8")
+		ajaxUsageReq.add_header("Content-Length", len(ajaxUsageData))
+		ajaxUsageReq.add_header("Referer", self._usageUrl)
+		ajaxUsageReq.add_header("X-Requested-With", "XMLHttpRequest")
+		ajaxUsageReq.add_header("Accept", "*/*")
+		ajaxUsageReq.add_header("Origin", self._originUrl)
+		ajaxUsageReq.add_header("Cookie", "hl=%s; persistent=%s; WSCSID=%s" % (self._lang, self._persistent, self._session))
+		ajaxUsageReq.add_header("User-Agent", self._headerUA)
+		ajaxUsagePage = urllib2.urlopen(ajaxUsageReq, ajaxUsageData)
+		self._getSession(ajaxUsagePage.info())
+		ajaxUsagePageData = ajaxUsagePage.read()
 
 		# Used: <strong>5 818,71&nbsp;MB</strong>
-		usedDataRe = re.findall(u'Used: <strong>([0-9 ,]*)&nbsp;MB<\/strong>', usageDataPageData.decode('utf-8'))
+		usedDataRe = re.findall(u'Used: <strong>([0-9 ,]*)&nbsp;MB<\/strong>', ajaxUsagePageData.decode('utf-8'))
 		usedData = float(usedDataRe[0].replace(" ", "").replace(",", "."))
 
 		# Remains in CZ <strong class="nowrap">97 605,29&nbsp;MB</strong>
-		remainsDataRe = re.findall(u'Remains in CZ <strong class="nowrap">([0-9 ,]*)&nbsp;MB</strong>', usageDataPageData.decode('utf-8'))
+		remainsDataRe = re.findall(u'Remains in CZ <strong class="nowrap">([0-9 ,]*)&nbsp;MB</strong>', ajaxUsagePageData.decode('utf-8'))
 		remainsData = float(remainsDataRe[0].replace(" ", "").replace(",", "."))
 
-		""" Cache data usage """
 		self._dataUsage = {'used': usedData, 'remain': remainsData}
-		return self._dataUsage
+
+		return True
 
 	""" Login to Vodafone.cz """
 	def login(self):
@@ -206,5 +195,5 @@ class VodafoneBase:
 	""" Get data usage """
 	def getDataUsage(self):
 		if self._dataUsage is None:
-			self._getDataUsage()
+			self._getAjaxUsage()
 		return self._dataUsage
