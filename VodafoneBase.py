@@ -138,7 +138,7 @@ class VodafoneBase:
 		usagePageData = usagePage.read()
 
 		# <strong class="blue big vodafoneRgBd">1 096,10 CZK</strong>
-		currentSpendingRe = re.findall(u'<strong class="blue big vodafoneRgBd">([0-9 ,]+) CZK<\/strong>', usagePageData.decode('utf-8'))
+		currentSpendingRe = re.findall(u'<strong class="blue big vodafoneRgBd">\s*([0-9 ,]+) CZK\s*<\/strong>', usagePageData.decode('utf-8'))
 		currentSpending = float(currentSpendingRe[0].replace(" ", "").replace(",", "."))
 
 		""" Cache current spending """
